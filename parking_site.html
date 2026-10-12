@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parking Management System</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#22262b;--panel:#2c3138;--line:#f2c230;--ink:#f4f4f0;--mute:#a8afb8;--ok:#3fb27f;--bad:#e5534b;box-sizing:border-box;
+padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#e9e7df;--panel:#fff;--ink:#22262b;--mute:#5d646d;--line:#c99a00}}
+:root[data-theme="dark"]{--bg:#22262b;--panel:#2c3138;--ink:#f4f4f0;--mute:#a8afb8;--line:#f2c230}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Barlow,system-ui,sans-serif}
+h1,h2{font-family:"Barlow Condensed",Impact,sans-serif;margin:0;letter-spacing:.5px}
+h1{font-size:34px}h2{font-size:24px;margin-bottom:10px}
+main{max-width:900px;margin:0 auto;padding:16px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+nav button{background:none;border:0;color:var(--mute);font:inherit;font-weight:500;padding:8px 10px;cursor:pointer}
+nav button.on{color:var(--line);border-bottom:2px solid var(--line)}
+.panel{background:var(--panel);border-radius:6px;padding:16px;margin-bottom:16px}
+.bays{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-top:3px solid var(--line)}
+.bay{border-left:3px solid var(--line);border-bottom:3px solid var(--line);padding:18px 4px;text-align:center;min-height:92px}
+.bay:nth-child(5n){border-right:3px solid var(--line)}
+.bay b{font-family:"Barlow Condensed",sans-serif;font-size:22px;display:block}
+.bay.free{color:var(--ok)}.bay.busy{color:var(--bad);background:#00000022}
+.bay small{color:var(--mute);display:block;word-break:break-all}
+form,.row{display:flex;gap:10px;flex-wrap:wrap}
+input,select,button.go{font:inherit;padding:10px 12px;border-radius:4px;border:1px solid var(--mute);background:var(--bg);color:var(--ink)}
+button.go{background:var(--line);color:#22262b;border:0;font-weight:500;cursor:pointer}
+button.red{background:var(--bad);color:#fff}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid var(--line);outline-offset:2px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #8884}
+.wrap{overflow-x:auto}
+#msg{min-height:24px;margin-bottom:10px;color:var(--line);font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.stats div{border-left:3px solid var(--line);padding-left:10px;color:var(--mute)}
+.stats b{display:block;font:700 30px "Barlow Condensed",sans-serif;color:var(--ink)}
+#login{max-width:340px;margin:12vh auto}
+#login form{flex-direction:column}
+.hide{display:none}
+</style></head><body>
+<main>
+<section id="login" class="panel">
+ <h1>Parking Management</h1><p style="color:var(--mute)">Attendant login (admin / admin123)</p>
+ <form onsubmit="return login(event)">
+  <input id="u" placeholder="Username" autocomplete="username" required>
+  <input id="p" type="password" placeholder="Password" autocomplete="current-password" required>
+  <button class="go">Log in</button><div id="lerr" style="color:var(--bad)"></div>
+ </form>
+</section>
+
+<section id="app" class="hide">
+ <div class="top"><h1>Parking Management</h1>
+  <nav><button id="n-home" class="on" onclick="tab('home')">Bays</button><button id="n-rep" onclick="tab('rep')">Reports</button><button onclick="logout()">Log out</button></nav></div>
+ <div id="msg" role="status"></div>
+
+ <div id="home">
+  <div class="panel"><h2 id="count"></h2><div class="bays" id="bays"></div></div>
+  <div class="panel"><h2>Park a vehicle</h2>
+   <form onsubmit="return park(event)">
+    <input id="plate" placeholder="Plate, e.g. AP39AB1234" required>
+    <select id="vt"><option>Bike</option><option selected>Car</option><option>Truck</option></select>
+    <button class="go">Park vehicle</button></form></div>
+  <div class="panel"><h2>Parked now</h2>
+   <div class="row" style="margin-bottom:10px"><input id="q" placeholder="Search plate" oninput="draw()"></div>
+   <div class="wrap"><table><thead><tr><th>Bay</th><th>Plate</th><th>Type</th><th>Entered</th><th></th></tr></thead><tbody id="list"></tbody></table></div></div>
+ </div>
+
+ <div id="rep" class="hide">
+  <div class="panel"><div class="stats" id="stats"></div></div>
+  <div class="panel"><h2>History</h2><div class="wrap"><table><thead><tr><th>Bay</th><th>Plate</th><th>Type</th><th>Entered</th><th>Left</th><th>Fee</th></tr></thead><tbody id="hist"></tbody></table></div></div>
+ </div>
+</section>
+</main>
+<script>
+const RATES={Bike:10,Car:20,Truck:40},N=10,KEY="parking_v1";
+let rows=[];
+try{rows=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){rows=[]}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(rows))}catch(e){}};
+const $=id=>document.getElementById(id);
+const act=()=>rows.filter(r=>!r.out);
+const fmt=t=>t?new Date(t).toLocaleString():"";
+const say=t=>{$("msg").textContent=t};
+
+function login(e){e.preventDefault();
+ if($("u").value==="admin"&&$("p").value==="admin123"){$("login").classList.add("hide");$("app").classList.remove("hide");draw()}
+ else $("lerr").textContent="Wrong username or password.";return false}
+function logout(){$("app").classList.add("hide");$("login").classList.remove("hide");$("p").value=""}
+function tab(t){$("home").classList.toggle("hide",t!=="home");$("rep").classList.toggle("hide",t!=="rep");
+ $("n-home").classList.toggle("on",t==="home");$("n-rep").classList.toggle("on",t==="rep");draw()}
+
+function park(e){e.preventDefault();
+ const plate=$("plate").value.trim().toUpperCase().replace(/\s/g,""),type=$("vt").value;
+ if(!/^[A-Z0-9]{4,12}$/.test(plate)){say("Plate must be 4-12 letters or digits.");return false}
+ if(act().some(r=>r.plate===plate)){say(plate+" is already parked.");return false}
+ const used=act().map(r=>r.bay);let bay=0;
+ for(let i=1;i<=N;i++)if(!used.includes(i)){bay=i;break}
+ if(!bay){say("Parking is full.");return false}
+ rows.push({bay,plate,type,in:Date.now(),out:null,fee:0});save();
+ say(plate+" parked in bay "+bay+".");$("plate").value="";draw();return false}
+
+function leave(plate){
+ const r=act().find(x=>x.plate===plate);if(!r)return;
+ r.out=Date.now();
+ const hrs=Math.max(1,Math.ceil((r.out-r.in)/3600000));
+ r.fee=hrs*RATES[r.type];save();
+ say("Bill for "+plate+": Rs "+r.fee+" ("+hrs+" hr x Rs "+RATES[r.type]+").");draw()}
+
+function cell(tr,txt){const td=document.createElement("td");td.textContent=txt;tr.appendChild(td);return td}
+
+function draw(){
+ const a=act(),used={};a.forEach(r=>used[r.bay]=r.plate);
+ $("count").textContent=(N-a.length)+" of "+N+" bays free";
+ const b=$("bays");b.textContent="";
+ for(let i=1;i<=N;i++){const d=document.createElement("div");d.className="bay "+(used[i]?"busy":"free");
+  const s=document.createElement("b");s.textContent=i;const m=document.createElement("small");m.textContent=used[i]||"Free";
+  d.append(s,m);b.appendChild(d)}
+ const q=$("q").value.trim().toUpperCase(),l=$("list");l.textContent="";
+ const show=a.filter(r=>r.plate.includes(q));
+ if(!show.length){const tr=document.createElement("tr");const td=cell(tr,"No vehicles. Park one above.");td.colSpan=5;l.appendChild(tr)}
+ show.forEach(r=>{const tr=document.createElement("tr");cell(tr,r.bay);cell(tr,r.plate);cell(tr,r.type);cell(tr,fmt(r.in));
+  const td=document.createElement("td"),bt=document.createElement("button");bt.className="go red";bt.textContent="Exit & bill";
+  bt.onclick=()=>leave(r.plate);td.appendChild(bt);tr.appendChild(td);l.appendChild(tr)});
+ const done=rows.filter(r=>r.out),st=$("stats");st.textContent="";
+ [["Parked now",a.length],["Free bays",N-a.length],["Vehicles served",done.length],["Revenue","Rs "+done.reduce((s,r)=>s+r.fee,0)],
+  ["Bikes / Cars / Trucks",["Bike","Car","Truck"].map(t=>rows.filter(r=>r.type===t).length).join(" / ")]]
+ .forEach(([k,v])=>{const d=document.createElement("div");d.textContent=k;const x=document.createElement("b");x.textContent=v;d.prepend(x);st.appendChild(d)});
+ const h=$("hist");h.textContent="";
+ rows.slice().reverse().forEach(r=>{const tr=document.createElement("tr");
+  [r.bay,r.plate,r.type,fmt(r.in),fmt(r.out),r.out?"Rs "+r.fee:""].forEach(v=>cell(tr,v));h.appendChild(tr)})}
+</script></body></html>
