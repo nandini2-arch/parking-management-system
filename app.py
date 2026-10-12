@@ -3,10 +3,11 @@ Run:  pip install flask   then   python app.py   and open http://127.0.0.1:5000
 Login: admin / admin123
 """
 from flask import Flask, render_template_string, request, redirect, session, flash
+import os
 import parking_core as pc
 
 app = Flask(__name__)
-app.secret_key = "change-this-secret"
+app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret")
 
 PAGE = """
 <!doctype html><html><head><meta charset="utf-8">
@@ -134,4 +135,4 @@ def reports():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True)  # local only; Vercel uses the `app` object

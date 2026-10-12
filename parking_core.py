@@ -3,7 +3,7 @@ import csv
 import os
 from datetime import datetime
 
-FILE = "parking.csv"
+FILE = "/tmp/parking.csv" if os.environ.get("VERCEL") else "parking.csv"
 TOTAL_SLOTS = 10
 RATES = {"Bike": 10, "Car": 20, "Truck": 40}   # Rs per hour
 FIELDS = ["slot", "plate", "type", "entry", "exit", "fee"]
